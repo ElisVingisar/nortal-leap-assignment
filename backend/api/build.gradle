@@ -1,0 +1,67 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+    id 'java'
+}
+
+bootRun {
+    systemProperty 'spring.output.ansi.enabled', 'ALWAYS'
+}
+
+def hiddenTestsDir = file("$rootDir/hidden-tests")
+def runHiddenTestsFlag = (System.getenv('RUN_HIDDEN_TESTS') == 'true') || project.hasProperty('runHiddenTests') || gradle.startParameter.taskNames.any { it.toLowerCase().contains('hidden') }
+
+if (hiddenTestsDir.exists() && runHiddenTestsFlag) {
+    sourceSets {
+        hiddenTest {
+            java.srcDir(hiddenTestsDir)
+            resources.srcDir("$rootDir/hidden-tests/resources")
+            compileClasspath += sourceSets.main.output + sourceSets.test.output
+            runtimeClasspath += output + compileClasspath
+        }
+    }
+
+    configurations {
+        hiddenTestImplementation.extendsFrom(testImplementation)
+        hiddenTestRuntimeOnly.extendsFrom(testRuntimeOnly)
+    }
+}
+
+dependencies {
+    implementation project(':core')
+    implementation project(':persistence')
+
+    implementation libs.spring.boot.starter.web
+    implementation libs.spring.boot.starter.data.jpa
+    implementation libs.spring.boot.starter.validation
+    implementation libs.spring.boot.starter.security
+    implementation libs.spring.boot.starter.oauth2.resource.server
+    implementation libs.spring.boot.starter.cache
+
+    runtimeOnly libs.h2
+    runtimeOnly libs.p6spy
+
+    compileOnly libs.lombok
+    annotationProcessor libs.lombok
+
+    testImplementation libs.spring.boot.starter.test
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    if (configurations.findByName('hiddenTestRuntimeOnly')) {
+        hiddenTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+if (sourceSets.findByName('hiddenTest')) {
+    tasks.register('hiddenVerification', Test) {
+        description = 'Runs hidden verification tests'
+        group = 'verification'
+        testClassesDirs = sourceSets.hiddenTest.output.classesDirs
+        classpath = sourceSets.hiddenTest.runtimeClasspath
+        useJUnitPlatform()
+        shouldRunAfter(test)
+    }
+}

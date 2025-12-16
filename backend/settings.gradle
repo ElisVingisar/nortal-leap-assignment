@@ -1,0 +1,6 @@
+rootProject.name = "nortal-library-service"
+
+include("core")
+include("persistence")
+include("api")
+

@@ -1,0 +1,27 @@
+plugins {
+    id 'java-library'
+    id 'org.springframework.boot'
+}
+
+bootJar {
+    enabled = false
+}
+
+jar {
+    enabled = true
+}
+
+dependencies {
+    implementation project(':core')
+    implementation libs.spring.boot.starter.data.jpa
+    implementation libs.spring.boot.starter.cache
+    implementation libs.caffeine
+
+    runtimeOnly libs.h2
+    runtimeOnly libs.p6spy
+
+    compileOnly libs.lombok
+    annotationProcessor libs.lombok
+
+    testImplementation libs.spring.boot.starter.test
+}

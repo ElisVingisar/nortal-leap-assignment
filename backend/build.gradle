@@ -1,0 +1,58 @@
+plugins {
+    id 'com.diffplug.spotless' version '6.25.0' apply false
+    id 'org.springframework.boot' version '3.3.4' apply false
+    id 'io.spring.dependency-management' version '1.1.5' apply false
+}
+
+allprojects {
+    group = 'com.nortal.library'
+    version = '1.0-SNAPSHOT'
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'com.diffplug.spotless'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    dependencies {
+        testImplementation(libs.junit.jupiter)
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom("org.springframework.boot:spring-boot-dependencies:${libs.versions.spring.boot.get()}")
+        }
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+
+    spotless {
+        java {
+            toggleOffOn()
+            importOrder()
+            removeUnusedImports()
+            googleJavaFormat()
+        }
+    }
+}
+
+tasks.register('hiddenVerification') {
+    group = 'verification'
+    description = 'Runs hidden verification tests for subprojects that define them'
+    dependsOn(subprojects.collect { project ->
+        project.tasks.findByName('hiddenVerification')
+    }.findAll { it != null })
+}
+

@@ -1,0 +1,11 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    implementation libs.jakarta.persistence
+    implementation libs.jakarta.validation
+
+    compileOnly libs.lombok
+    annotationProcessor libs.lombok
+}
