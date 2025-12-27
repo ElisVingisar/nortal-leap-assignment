@@ -21,6 +21,7 @@ public class LibraryService {
     this.memberRepository = memberRepository;
   }
 
+  // Borrow a book - checks queue order to prevent line-jumping
   public Result borrowBook(String bookId, String memberId) {
     Optional<Book> book = bookRepository.findById(bookId);
     if (book.isEmpty()) {
@@ -29,16 +30,49 @@ public class LibraryService {
     if (!memberRepository.existsById(memberId)) {
       return Result.failure("MEMBER_NOT_FOUND");
     }
+
+    Book entity = book.get();
+
+    // Check book-specific issues before checking member's borrow limit
+    if (memberId.equals(entity.getLoanedTo())) {
+      return Result.failure("ALREADY_LOANED");
+    }
+    if (entity.getLoanedTo() != null) {
+      return Result.failure("BOOK_UNAVAILABLE");
+    }
     if (!canMemberBorrow(memberId)) {
       return Result.failure("BORROW_LIMIT");
     }
-    Book entity = book.get();
+
+    // If a reservation queue exists, check if there are eligible members
+    if (!entity.getReservationQueue().isEmpty()) {
+      // Find first eligible member in queue
+      String firstEligible = null;
+      for (String queuedMember : entity.getReservationQueue()) {
+        if (memberRepository.existsById(queuedMember) && canMemberBorrow(queuedMember)) {
+          firstEligible = queuedMember;
+          break;
+        }
+      }
+
+      // If there's an eligible member in queue, only they can borrow
+      if (firstEligible != null) {
+        if (!memberId.equals(firstEligible)) {
+          return Result.failure("QUEUE_EXISTS");
+        }
+        // Remove the member from queue since they're now borrowing
+        entity.getReservationQueue().remove(firstEligible);
+      }
+      // If no eligible members in queue, allow anyone to borrow
+    }
+
     entity.setLoanedTo(memberId);
     entity.setDueDate(LocalDate.now().plusDays(DEFAULT_LOAN_DAYS));
     bookRepository.save(entity);
     return Result.success();
   }
 
+  // Return a book - only the borrower can return it, then pass it to the next eligible member in queue or let the returner receive their reserved books
   public ResultWithNext returnBook(String bookId, String memberId) {
     Optional<Book> book = bookRepository.findById(bookId);
     if (book.isEmpty()) {
@@ -46,14 +80,89 @@ public class LibraryService {
     }
 
     Book entity = book.get();
+
+    if (entity.getLoanedTo() == null) {
+      return ResultWithNext.failure();
+    }
+
+    if (memberId == null || !entity.getLoanedTo().equals(memberId)) {
+      return ResultWithNext.failure();
+    }
+
     entity.setLoanedTo(null);
     entity.setDueDate(null);
-    String nextMember =
-        entity.getReservationQueue().isEmpty() ? null : entity.getReservationQueue().get(0);
+
+    // Try to hand off this book to the next eligible reserver in its queue
+    String nextMember = tryHandoffBook(entity);
     bookRepository.save(entity);
+
+    // After returning, check if the returning member can now receive any books they've reserved
+    processReservationsForMember(memberId);
+
     return ResultWithNext.success(nextMember);
   }
 
+  // Find the first eligible member in the queue and give them the book, skipping those at their limit
+  private String tryHandoffBook(Book book) {
+    int queueIndex = 0;
+    while (queueIndex < book.getReservationQueue().size()) {
+      String candidateMember = book.getReservationQueue().get(queueIndex);
+
+      // Check if member still exists
+      if (!memberRepository.existsById(candidateMember)) {
+        // Member was deleted - permanently remove from queue
+        book.getReservationQueue().remove(queueIndex);
+        continue;
+      }
+
+      // Check if member can borrow (not at limit)
+      if (canMemberBorrow(candidateMember)) {
+        // This member can receive the book
+        book.setLoanedTo(candidateMember);
+        book.setDueDate(LocalDate.now().plusDays(DEFAULT_LOAN_DAYS));
+        // Remove from queue since they now have the book
+        book.getReservationQueue().remove(queueIndex);
+        return candidateMember;
+      } else {
+        // Member is at their limit - keep them in queue but check next
+        queueIndex++;
+      }
+    }
+    return null;
+  }
+
+  // Check if a member can now receive any books they have reserved
+  private void processReservationsForMember(String memberId) {
+    // Skip if member is no longer eligible
+    if (!canMemberBorrow(memberId)) {
+      return;
+    }
+
+    // Get only available books where this member is in the queue
+    List<Book> candidateBooks = bookRepository.findAvailableBooksWithMemberInQueue(memberId);
+
+    for (Book book : candidateBooks) {
+      // Check if this member is first eligible in queue
+      String firstEligible = null;
+      for (String queuedMember : book.getReservationQueue()) {
+        if (memberRepository.existsById(queuedMember) && canMemberBorrow(queuedMember)) {
+          firstEligible = queuedMember;
+          break;
+        }
+      }
+
+      // If this member is first eligible, give them the book
+      if (memberId.equals(firstEligible)) {
+        book.setLoanedTo(memberId);
+        book.setDueDate(LocalDate.now().plusDays(DEFAULT_LOAN_DAYS));
+        book.getReservationQueue().remove(memberId);
+        bookRepository.save(book);
+        break; // Member received a book, stop processing
+      }
+    }
+  }
+
+  // Reserve a book - if it's available and member can borrow, give it to them immediately, otherwise add to queue
   public Result reserveBook(String bookId, String memberId) {
     Optional<Book> book = bookRepository.findById(bookId);
     if (book.isEmpty()) {
@@ -64,6 +173,24 @@ public class LibraryService {
     }
 
     Book entity = book.get();
+
+    if (entity.getReservationQueue().contains(memberId)) {
+      return Result.failure("ALREADY_RESERVED");
+    }
+
+    if (memberId.equals(entity.getLoanedTo())) {
+      return Result.failure("ALREADY_LOANED");
+    }
+
+    // If book is available and member is eligible, immediately loan it
+    if (entity.getLoanedTo() == null && canMemberBorrow(memberId)) {
+      entity.setLoanedTo(memberId);
+      entity.setDueDate(LocalDate.now().plusDays(DEFAULT_LOAN_DAYS));
+      bookRepository.save(entity);
+      return Result.success();
+    }
+
+    // Book is loaned OR member is at limit - add to reservation queue
     entity.getReservationQueue().add(memberId);
     bookRepository.save(entity);
     return Result.success();
@@ -87,17 +214,12 @@ public class LibraryService {
     return Result.success();
   }
 
+  // Check if a member can borrow more books - uses optimized count query instead of loading all books
   public boolean canMemberBorrow(String memberId) {
     if (!memberRepository.existsById(memberId)) {
       return false;
     }
-    int active = 0;
-    for (Book book : bookRepository.findAll()) {
-      if (memberId.equals(book.getLoanedTo())) {
-        active++;
-      }
-    }
-    return active < MAX_LOANS;
+    return bookRepository.countByLoanedTo(memberId) < MAX_LOANS;
   }
 
   public List<Book> searchBooks(String titleContains, Boolean availableOnly, String loanedTo) {

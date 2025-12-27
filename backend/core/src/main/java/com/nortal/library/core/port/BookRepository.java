@@ -14,4 +14,8 @@ public interface BookRepository {
   void delete(Book book);
 
   boolean existsById(String id);
+
+  int countByLoanedTo(String memberId);
+
+  List<Book> findAvailableBooksWithMemberInQueue(String memberId);
 }

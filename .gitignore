@@ -12,6 +12,8 @@ frontend/.angular/cache
 # Backend Gradle
 backend/.gradle
 backend/build
+backend/**/build
+backend/**/bin
 .gradle/
 .gradle/**/*
 
