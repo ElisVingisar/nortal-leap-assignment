@@ -1,6 +1,20 @@
 # AI Usage
 
-Briefly describe how you used AI (tools, prompts, code snippets, fixes). Be concise and honest (using AI is fine; it's just a tool; we want to know your method). If you did not use AI, state that here.
+I used **Claude Code** throughout this assignment as a learning resource and development partner.
+
+**Understanding the codebase:**
+Since I was unfamiliar with hexagonal architecture, I asked Claude to explain the repository pattern used in the project:
+> "Explain me the logic and connection with domain (Member.java) -> port (MemberRepository.java) -> adapter (MemberRepositoryAdapter.java) -> jpa (JpaMemberRepository.java). I haven't worked with this structure before, so I need to understand the logic behind it and if some changes are made in service or other java classes, then how they should or should not be changed?"
+
+I also used it to clarify Spring Boot concepts I was less familiar with.
+
+**Implementation:**
+- I discussed my logic and ideas with Claude to validate my approach made sense
+- I asked for code solution ideas for the reservation queue automation methods (like `tryHandoffBook` and `processReservationsForMember`) - this was the most complex part where I needed the most assistance
+- I asked how certain methods could be less expensive (Claude suggested using `countByLoanedTo` and `findAvailableBooksWithMemberInQueue` queries)
+
+**Debugging:**
+When tests failed (e.g., getting `BOOK_UNAVAILABLE` instead of `QUEUE_EXISTS`), I shared the failing scenarios with Claude to help identify the issues.
 
 ## Assumptions
 
