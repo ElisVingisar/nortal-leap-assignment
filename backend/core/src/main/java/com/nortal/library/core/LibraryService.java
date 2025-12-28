@@ -37,9 +37,6 @@ public class LibraryService {
     if (memberId.equals(entity.getLoanedTo())) {
       return Result.failure("ALREADY_LOANED");
     }
-    if (entity.getLoanedTo() != null) {
-      return Result.failure("BOOK_UNAVAILABLE");
-    }
     if (!canMemberBorrow(memberId)) {
       return Result.failure("BORROW_LIMIT");
     }
@@ -64,6 +61,10 @@ public class LibraryService {
         entity.getReservationQueue().remove(firstEligible);
       }
       // If no eligible members in queue, allow anyone to borrow
+    }
+
+    if (entity.getLoanedTo() != null) {
+      return Result.failure("BOOK_UNAVAILABLE");
     }
 
     entity.setLoanedTo(memberId);
