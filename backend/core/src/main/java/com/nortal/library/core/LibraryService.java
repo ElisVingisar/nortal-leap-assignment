@@ -73,7 +73,8 @@ public class LibraryService {
     return Result.success();
   }
 
-  // Return a book - only the borrower can return it, then pass it to the next eligible member in queue or let the returner receive their reserved books
+  // Return a book - only the borrower can return it, then pass it to the next eligible member in
+  // queue or let the returner receive their reserved books
   public ResultWithNext returnBook(String bookId, String memberId) {
     Optional<Book> book = bookRepository.findById(bookId);
     if (book.isEmpty()) {
@@ -103,7 +104,8 @@ public class LibraryService {
     return ResultWithNext.success(nextMember);
   }
 
-  // Find the first eligible member in the queue and give them the book, skipping those at their limit
+  // Find the first eligible member in the queue and give them the book, skipping those at their
+  // limit
   private String tryHandoffBook(Book book) {
     int queueIndex = 0;
     while (queueIndex < book.getReservationQueue().size()) {
@@ -163,7 +165,8 @@ public class LibraryService {
     }
   }
 
-  // Reserve a book - if it's available and member can borrow, give it to them immediately, otherwise add to queue
+  // Reserve a book - if it's available and member can borrow, give it to them immediately,
+  // otherwise add to queue
   public Result reserveBook(String bookId, String memberId) {
     Optional<Book> book = bookRepository.findById(bookId);
     if (book.isEmpty()) {
@@ -215,7 +218,8 @@ public class LibraryService {
     return Result.success();
   }
 
-  // Check if a member can borrow more books - uses optimized count query instead of loading all books
+  // Check if a member can borrow more books - uses optimized count query instead of loading all
+  // books
   public boolean canMemberBorrow(String memberId) {
     if (!memberRepository.existsById(memberId)) {
       return false;
